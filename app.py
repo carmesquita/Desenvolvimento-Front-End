@@ -1,596 +1,207 @@
-"""TP2: visualizacoes da COVID-19 com dados do Ministerio da Saude."""
-
-from __future__ import annotations
-
-import io
-import unicodedata
-import zipfile
-
-import altair as alt
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-import plotly.graph_objects as go
-import pydeck as pdk
-import seaborn as sns
 import streamlit as st
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import altair as alt
+import plotly.express as px
 from plotly.subplots import make_subplots
+import pydeck as pdk
 
 
-st.set_page_config(page_title="TP2 - COVID-19", page_icon="📊", layout="wide")
+st.title("TP2 - Dados da COVID-19 no Brasil")
 
-REGIOES = ["Norte", "Nordeste", "Sudeste", "Sul", "Centro-Oeste"]
-REGIAO_POR_UF = {
-    "AC": "Norte", "AP": "Norte", "AM": "Norte", "PA": "Norte",
-    "RO": "Norte", "RR": "Norte", "TO": "Norte",
-    "AL": "Nordeste", "BA": "Nordeste", "CE": "Nordeste", "MA": "Nordeste",
-    "PB": "Nordeste", "PE": "Nordeste", "PI": "Nordeste", "RN": "Nordeste",
-    "SE": "Nordeste", "ES": "Sudeste", "MG": "Sudeste", "RJ": "Sudeste",
-    "SP": "Sudeste", "PR": "Sul", "RS": "Sul", "SC": "Sul",
-    "DF": "Centro-Oeste", "GO": "Centro-Oeste", "MT": "Centro-Oeste",
-    "MS": "Centro-Oeste",
-}
-UF_POR_CODIGO = {
-    11: "RO", 12: "AC", 13: "AM", 14: "RR", 15: "PA", 16: "AP", 17: "TO",
-    21: "MA", 22: "PI", 23: "CE", 24: "RN", 25: "PB", 26: "PE", 27: "AL",
-    28: "SE", 29: "BA", 31: "MG", 32: "ES", 33: "RJ", 35: "SP", 41: "PR",
-    42: "SC", 43: "RS", 50: "MS", 51: "MT", 52: "GO", 53: "DF",
-}
-EXERCICIOS = [
-    "1. Importancia da visualizacao", "2. Barras com Streamlit",
-    "3. Linha com Streamlit", "4. Area com Streamlit", "5. Mapa com Streamlit",
-    "6. Barras com Matplotlib", "7. Boxplot com Seaborn", "8. Area com Altair",
-    "9. Heatmap com Altair", "10. Pizza com Plotly", "11. Subplots com Plotly",
-    "12. Mapa interativo com PyDeck",
-]
+# Carregamento de arquivos
+df = pd.concat([pd.read_csv("Entrega TP2/Dados/HIST_PAINEL_COVIDBR_05set2025 (1)/HIST_PAINEL_COVIDBR_2020_Parte1_05set2025.csv", sep=";", encoding="utf-8", low_memory=False), pd.read_csv("Entrega TP2/Dados/HIST_PAINEL_COVIDBR_05set2025 (1)/HIST_PAINEL_COVIDBR_2020_Parte2_05set2025.csv", sep=";", encoding="utf-8", low_memory=False)], ignore_index=True)
 
-# Coordenadas de apoio caso a fonte on-line de todos os municipios esteja indisponivel.
-COORDENADAS_RJ = [
-    ("Rio de Janeiro", -22.9068, -43.1729), ("Niteroi", -22.8832, -43.1034),
-    ("Sao Goncalo", -22.8269, -43.0539), ("Duque de Caxias", -22.7856, -43.3117),
-    ("Nova Iguacu", -22.7556, -43.4603), ("Campos dos Goytacazes", -21.7622, -41.3181),
-    ("Petropolis", -22.5112, -43.1779), ("Volta Redonda", -22.5202, -44.0996),
-    ("Macae", -22.3768, -41.7848), ("Belford Roxo", -22.7640, -43.3990),
-    ("Itaborai", -22.7441, -42.8597), ("Marica", -22.9195, -42.8186),
-    ("Cabo Frio", -22.8894, -42.0286), ("Nova Friburgo", -22.2819, -42.5311),
-    ("Angra dos Reis", -23.0067, -44.3181), ("Barra Mansa", -22.5447, -44.1713),
-    ("Resende", -22.4703, -44.4509), ("Teresopolis", -22.4167, -42.9782),
-    ("Sao Joao de Meriti", -22.8058, -43.3729), ("Nilopolis", -22.8057, -43.4233),
-]
+# conversão para organizar as datas nos gráficos
+df["data"] = pd.to_datetime(df["data"], errors="coerce")
+
+#separação da base por estado
+df_estado = df[(df["estado"].notna()) & (df["municipio"].isna())]
+df_estado_semana = df_estado.groupby(["regiao", "estado", "semanaEpi"]).agg({"data": "min", "casosAcumulado": "max", "casosNovos": "sum", "obitosNovos": "sum"}).reset_index()
+df_regiao_semana = df_estado_semana.groupby(["regiao", "semanaEpi"]).agg({"data": "min", "casosNovos": "sum", "obitosNovos": "sum"}).reset_index()
+
+st.write("Previa dos DadosS")
+st.dataframe(df.head(10), width="stretch")
 
 
-def chave_texto(valor: object) -> str:
-    """Remove acentos e sinais para comparar nomes vindos de fontes diferentes."""
-    texto = "" if pd.isna(valor) else str(valor)
-    texto = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode()
-    return "".join(c for c in texto.lower() if c.isalnum())
+# Exercício 1
+st.subheader("-- Exercício 1 --")
+st.header("Importância da visualização de dados: ")
+st.write("A visualização de dados é muito importante pois facilita a compreensão de uma grande quantidade de informações. Por meio de gráficos e mapas é possível acompanhar o aumento ou a diminuição dos casos de covid e óbitos, comparar estados e regiões e identificar os locais que foram mais afetados e precisam de mais atenção.")
+st.write("Essas informações ajudam a população a entender a situação da pandemia e a importância das medidas de prevenção.")
 
 
-ALIASES = {
-    "regiao": "regiao", "estado": "estado", "municipio": "municipio",
-    "data": "data", "semanaepi": "semana_epi", "populacaotcu2019": "populacao",
-    "populacao": "populacao", "casosacumulado": "casos_acumulados",
-    "casosacumulados": "casos_acumulados", "casosnovos": "casos_novos",
-    "obitosacumulado": "obitos_acumulados", "obitosacumulados": "obitos_acumulados",
-    "obitosnovos": "obitos_novos", "codmun": "codigo_municipio",
-    "codigomunicipio": "codigo_municipio", "leitosocupados": "leitos_ocupados",
-    "ocupacaodeleitos": "leitos_ocupados",
-}
+# Exercício 2
+st.subheader("-- Exercício 2 --")
+st.header("Gráfico de barras com Streamlit")
+maior_semana = int(df_estado_semana[df_estado_semana["estado"] == "SP"].nlargest(1, "casosNovos")["semanaEpi"].iloc[0])
+maximo_casos_semana = int(df_estado_semana[df_estado_semana["estado"] == "SP"]["casosNovos"].max())
+st.bar_chart(df_estado_semana[df_estado_semana["estado"] == "SP"], x="semanaEpi", y="casosNovos")
+st.write(f"O estado escolhido foi **São Paulo** por possuir uma grande "
+         "população e uma região metropolitana com intensa circulação de pessoas. "
+         f"Em 2020, a maior quantidade de casos novos aparece na semana {maior_semana}, com {maximo_casos_semana} casos nesta semana.")
 
 
-def normalizar(chunk: pd.DataFrame) -> pd.DataFrame:
-    """Padroniza as colunas das diferentes partes do historico oficial."""
-    renomear = {}
-    for coluna in chunk.columns:
-        chave = chave_texto(coluna)
-        if chave in ALIASES:
-            renomear[coluna] = ALIASES[chave]
-        elif "leito" in chave and "ocup" in chave:
-            renomear[coluna] = "leitos_ocupados"
-    chunk = chunk.rename(columns=renomear)
-    essenciais = [
-        "regiao", "estado", "municipio", "data", "semana_epi", "populacao",
-        "casos_acumulados", "casos_novos", "obitos_acumulados", "obitos_novos",
-        "codigo_municipio",
-    ]
-    for coluna in essenciais:
-        if coluna not in chunk:
-            chunk[coluna] = pd.NA
-    manter = essenciais + (["leitos_ocupados"] if "leitos_ocupados" in chunk else [])
-    chunk = chunk[manter].copy()
-    for coluna in ["regiao", "estado", "municipio"]:
-        chunk[coluna] = chunk[coluna].astype("string").str.strip()
-        chunk[coluna] = chunk[coluna].replace({"": pd.NA, "nan": pd.NA, "<NA>": pd.NA})
-    chunk["data"] = pd.to_datetime(chunk["data"], errors="coerce", dayfirst=True)
-    numericas = [
-        "semana_epi", "populacao", "casos_acumulados", "casos_novos",
-        "obitos_acumulados", "obitos_novos", "codigo_municipio",
-    ] + (["leitos_ocupados"] if "leitos_ocupados" in chunk else [])
-    for coluna in numericas:
-        chunk[coluna] = pd.to_numeric(chunk[coluna], errors="coerce")
-    chunk["regiao"] = chunk["regiao"].fillna(chunk["estado"].map(REGIAO_POR_UF))
-    chunk["ano"] = chunk["data"].dt.year.astype("Int64")
-    chunk["semana_epi"] = chunk["semana_epi"].astype("Int64")
-    chunk["ordem_semana"] = chunk["ano"] * 100 + chunk["semana_epi"]
-    chunk["periodo_semana"] = (
-        chunk["ano"].astype("string") + "-SE"
-        + chunk["semana_epi"].astype("string").str.zfill(2)
-    )
-    return chunk
+# Exercício 3
+st.subheader("-- Exercício 3 --")
+st.header("Gráfico de linha com Streamlit")
+
+df_linha = df[(df["regiao"] == "Brasil") & (df["estado"].isna()) & (df["municipio"].isna())].groupby("semanaEpi").agg({"data": "min", "obitosAcumulado": "max"}).reset_index().sort_values("data")
+df_linha["aumentoSemanal"] = df_linha["obitosAcumulado"].diff()
+obitos_inicio = int(df_linha["obitosAcumulado"].iloc[0])
+obitos_final = int(df_linha["obitosAcumulado"].iloc[-1])
+maior_aumento = df_linha.loc[df_linha["aumentoSemanal"].idxmax()]
+
+st.line_chart(df_linha, x="data", y="obitosAcumulado")
+st.write("Em **2020**, os óbitos iniciaram em Abril subindo muito rápido chegando a quase 200.000 no final de **2020**")
 
 
-def consumir_csv(arquivo, nome, superiores, municipais):
-    """Le em blocos para nao manter todo o historico municipal na memoria."""
-    amostra = arquivo.read(8192)
-    arquivo.seek(0)
-    texto = amostra.decode("utf-8", errors="ignore") if isinstance(amostra, bytes) else amostra
-    separador = ";" if texto.count(";") >= texto.count(",") else ","
-    try:
-        leitor = pd.read_csv(
-            arquivo, sep=separador, encoding="utf-8", encoding_errors="replace",
-            chunksize=150_000, low_memory=False,
-        )
-        for chunk in leitor:
-            chunk = normalizar(chunk)
-            if chunk["data"].notna().sum() == 0:
-                continue
-            mascara = chunk["municipio"].notna()
-            superiores.append(chunk.loc[~mascara])
-            municipal = chunk.loc[mascara]
-            if not municipal.empty:
-                municipais.append(
-                    municipal.sort_values("data")
-                    .groupby(["estado", "municipio"], dropna=False, as_index=False).tail(1)
-                )
-    except Exception as erro:
-        raise ValueError(f"Nao foi possivel ler {nome}: {erro}") from erro
+# Exercício 4
+st.subheader("-- Exercício 4 --")
+st.header("Gráfico de área com Streamlit")
+
+df_area = df_estado_semana[df_estado_semana["estado"].isin(["RJ", "SP", "MG"])].pivot(index="data", columns="estado", values="casosAcumulado")
+
+st.area_chart(df_area)
+st.write("Foram escolhidos Rio de Janeiro, São Paulo e Minas Gerais, que são estados da região Sudeste. "
+         "São Paulo nitidamente apresenta os maiores valores acumulados. "
+         "O principal motivo pode ser porque possui a maior população do que os outros três")
+#df_coordenadas para o exercicio 5 e 12
+#pesquisei as coordenadas no Google Maps
+#pesquisei a área dos municípios no IBGE
+df_coordenadas = pd.DataFrame({"estado": ["RJ", "RJ", "RJ", "RJ", "RJ", "SP", "SP", "SP", "SP", "SP", "MG", "MG", "ES", "ES"],
+                               "municipio": ["Rio de Janeiro", "Niterói", "São Gonçalo", "Belford Roxo", "Duque de Caxias", "São Paulo", "Campinas", "São José do Rio Preto", "São Bernardo do Campo", "Santos", "Belo Horizonte", "Uberlândia", "Vitória", "Vila Velha"],
+                               "latitude": [-22.9068, -22.8832, -22.8269, -22.7640, -22.7856, -23.5505, -22.9099, -20.8197, -23.6914, -23.9342, -19.9167, -18.9186, -20.3155, -20.3297],
+                               "longitude": [-43.1729, -43.1034, -43.0539, -43.3992, -43.3117, -46.6333, -47.0626, -49.3794, -46.5646, -46.3286, -43.9345, -48.2772, -40.3128, -40.2925],
+                               "areaKm2": [1200.329, 133.757, 248.160, 78.985, 467.319, 1521.202, 794.571, 431.944, 409.532, 281.033, 331.354, 4115.206, 97.123, 210.225]})
+
+df_coordenadas = df_coordenadas.merge(df[df["municipio"].notna()].sort_values("data").groupby(["estado", "municipio"], as_index=False).tail(1)[["estado", "municipio", "casosAcumulado", "populacaoTCU2019"]], on=["estado", "municipio"], how="left")
+
+# Exercício 5
+st.subheader("-- Exercício 5 --")
+st.header("Mapa com Streamlit")
+
+df_mapa_sao_paulo = df_coordenadas[df_coordenadas["estado"] == "SP"].sort_values("casosAcumulado", ascending=False).head(5)
+
+st.map(df_mapa_sao_paulo, latitude="latitude", longitude="longitude", size=20000, color="#1f77b4aa", height=450)
+st.write(df_mapa_sao_paulo[["municipio", "casosAcumulado", "latitude", "longitude"]])
+st.write("O estado escolhido foi **São Paulo**. "
+         "Os cinco municípios com maior número de casos acumulados são São Paulo, Campinas, São José do Rio Preto, São Bernardo do Campo e Santos. "
+         "O município de São Paulo aparece em primeiro lugar, maior quantidade de casos acumulados.")
 
 
-@st.cache_data(show_spinner=False, max_entries=2)
-def carregar_dados(payloads: tuple[tuple[str, bytes], ...]) -> pd.DataFrame:
-    superiores, municipais = [], []
-    for nome, conteudo in payloads:
-        if nome.lower().endswith(".zip"):
-            with zipfile.ZipFile(io.BytesIO(conteudo)) as pacote:
-                membros = [m for m in pacote.namelist() if m.lower().endswith(".csv")]
-                if not membros:
-                    raise ValueError(f"{nome} nao contem CSVs.")
-                for membro in membros:
-                    with pacote.open(membro) as csv_zip:
-                        consumir_csv(csv_zip, membro, superiores, municipais)
-        else:
-            consumir_csv(io.BytesIO(conteudo), nome, superiores, municipais)
-    if not superiores and not municipais:
-        raise ValueError("Nenhuma linha valida foi encontrada.")
-    partes = []
-    if superiores:
-        partes.append(pd.concat(superiores, ignore_index=True))
-    if municipais:
-        municipal = pd.concat(municipais, ignore_index=True)
-        municipal = municipal.sort_values("data").groupby(
-            ["estado", "municipio"], dropna=False, as_index=False
-        ).tail(1)
-        partes.append(municipal)
-    return pd.concat(partes, ignore_index=True)
+# Exercício 6
+st.subheader("-- Exercício 6 --")
+st.header("Visualização com Matplotlib")
+
+df_matplotlib = df_estado_semana[df_estado_semana["semanaEpi"] == df_estado_semana["semanaEpi"].max()].sort_values("estado")
+fig, (ax_casos, ax_obitos) = plt.subplots(1, 2, figsize=(16, 6))
+
+ax_casos.bar(df_matplotlib["estado"], df_matplotlib["casosNovos"], color="tab:blue")
+ax_casos.set_title("Casos novos por estado")
+ax_casos.set_xlabel("Estado")
+ax_casos.set_ylabel("Casos novos")
+ax_casos.tick_params(axis="x", rotation=90)
+ax_casos.grid(axis="y", alpha=0.3)
+
+ax_obitos.bar(df_matplotlib["estado"], df_matplotlib["obitosNovos"], color="tab:orange")
+ax_obitos.set_title("Óbito por estado")
+ax_obitos.set_xlabel("Estado")
+ax_obitos.set_ylabel("Óbitos")
+ax_obitos.tick_params(axis="x", rotation=90)
+ax_obitos.grid(axis="y", alpha=0.3)
+
+fig.suptitle("Maior semana de 2020")
+fig.tight_layout()
+
+st.pyplot(fig)
+st.write("Os estados com mais casos novos apresentam mais óbitos.")
 
 
-@st.cache_data(ttl=86_400, show_spinner=False)
-def carregar_coordenadas() -> tuple[pd.DataFrame, bool]:
-    """Usa coordenadas publicas como informacao geografica auxiliar."""
-    url = "https://raw.githubusercontent.com/kelvins/Municipios-Brasileiros/main/csv/municipios.csv"
-    try:
-        coord = pd.read_csv(url)
-        coord["estado"] = coord["codigo_uf"].map(UF_POR_CODIGO)
-        coord["municipio_chave"] = coord["nome"].map(chave_texto)
-        return coord[["estado", "municipio_chave", "latitude", "longitude"]], True
-    except Exception:
-        coord = pd.DataFrame(COORDENADAS_RJ, columns=["nome", "latitude", "longitude"])
-        coord["estado"] = "RJ"
-        coord["municipio_chave"] = coord["nome"].map(chave_texto)
-        return coord[["estado", "municipio_chave", "latitude", "longitude"]], False
+# Exercício 7
+st.subheader("-- Exercício 7 --")
+st.header("Boxplot com Seaborn")
+
+fig, ax = plt.subplots(figsize=(10, 6))
+sns.boxplot(data=df_regiao_semana[df_regiao_semana["regiao"].isin(["Norte", "Nordeste", "Sudeste"])], x="regiao", y="casosNovos", ax=ax)
+ax.set_title("Distribuição dos casos novos por semana")
+ax.set_xlabel("Região")
+ax.set_ylabel("Casos novos")
+
+st.pyplot(fig)
+st.write("O boxplot permite comparar a distribuição dos casos nas três regiões. "
+         "A região Sudeste apresenta valores maiores, porém se trata da região mais populosa entre as três.")
 
 
-def linhas_estaduais(dados):
-    return dados.loc[dados["estado"].notna() & dados["municipio"].isna()].copy()
+# Exercício 8
+st.subheader("-- Exercício 8 --")
+st.header("Gráfico de área com Altair")
+
+grafico_area = alt.Chart(df_regiao_semana[df_regiao_semana["regiao"] == "Sudeste"]).mark_area().encode(x=alt.X("data:T", title="Data"), y=alt.Y("casosNovos:Q", title="Casos novos"))
+
+st.altair_chart(grafico_area, width="stretch")
+st.write("A região escolhida foi o **Sudeste** por ser a região mais populosa do Brasil. "
+         "O gráfico permite visualizar os períodos de aumento e diminuição dos casos novos.")
 
 
-def linhas_regionais(dados):
-    return dados.loc[
-        dados["estado"].isna() & dados["municipio"].isna()
-        & dados["regiao"].isin(REGIOES)
-    ].copy()
+# Exercício 9
+st.subheader("-- Exercício 9 --")
+st.header("Heatmap com Altair")
+
+df_correlacao = df_estado[df_estado["estado"] == "SP"][["casosNovos", "obitosNovos"]].corr()
+valor_correlacao = round(df_correlacao.loc["casosNovos", "obitosNovos"], 2)
+df_correlacao = df_correlacao.reset_index().melt(id_vars="index")
+heatmap = alt.Chart(df_correlacao).mark_rect().encode(x=alt.X("index:N", title="Indicador"), y=alt.Y("variable:N", title="Indicador"), color=alt.Color("value:Q", title="Correlação"), tooltip=["index", "variable", "value"])
+
+st.altair_chart(heatmap, width="stretch")
+st.write(f"No estado de **São Paulo**, o heatmap mostra uma correlação de **{valor_correlacao}** entre os casos novos e os óbitos novos. O que indica uma alta correlação")
 
 
-def linhas_municipais(dados):
-    return dados.loc[dados["estado"].notna() & dados["municipio"].notna()].copy()
+# Exercício 10
+st.subheader("-- Exercício 10--")
+st.header("Gráfico de pizza com Plotly")
+
+df_pizza = df_estado.sort_values("data").groupby("estado", as_index=False).tail(1).groupby("regiao")["casosAcumulado"].sum().reset_index()
+grafico_pizza = px.pie(df_pizza, names="regiao", values="casosAcumulado", title="Distribuição dos casos acumulados entre as regiões")
+
+st.plotly_chart(grafico_pizza, width="stretch")
+st.write("O gráfico mostra a participação de cada região no total de casos. Sudeste apresenta a maior fatia, o que é esperado devido a alta população")
 
 
-def semanal_novos(base, grupos):
-    colunas = grupos + ["ordem_semana", "periodo_semana"]
-    return (
-        base.dropna(subset=["ordem_semana"]).groupby(colunas, as_index=False, dropna=False)
-        .agg(data_inicio=("data", "min"), casos_novos=("casos_novos", "sum"),
-             obitos_novos=("obitos_novos", "sum"))
-        .sort_values("ordem_semana")
-    )
+# Exercício 11
+st.subheader("-- Exercício 11 --")
+st.header("Subplots com Plotly")
+
+grafico_sudeste = px.bar(df_regiao_semana[df_regiao_semana["regiao"] == "Sudeste"], x="semanaEpi", y=["casosNovos", "obitosNovos"], barmode="group", title="Sudeste")
+grafico_nordeste = px.bar(df_regiao_semana[df_regiao_semana["regiao"] == "Nordeste"], x="semanaEpi", y=["casosNovos", "obitosNovos"], barmode="group", title="Nordeste")
+grafico_subplots = make_subplots(rows=1, cols=2, subplot_titles=["Sudeste", "Nordeste"])
+
+for trace in grafico_sudeste.data:
+    grafico_subplots.add_trace(trace, row=1, col=1)
+
+for trace in grafico_nordeste.data:
+    grafico_subplots.add_trace(trace, row=1, col=2)
+
+grafico_subplots.update_layout(title="Casos e óbitos novos por semana em 2020", barmode="group")
+
+st.plotly_chart(grafico_subplots, width="stretch")
+st.write("O Sudeste possui valores maiores em várias semanas, enquanto o Nordeste apresenta uma quantidade consideravemente menor.")
 
 
-def semanal_regioes(dados):
-    base = linhas_regionais(dados)
-    if base.empty:
-        base = linhas_estaduais(dados)
-    return semanal_novos(base, ["regiao"])
+# Exercício 12
+st.subheader("-- Exercício 12 --")
+st.header("Mapa interativo com Pydeck")
 
+df_pydeck = df_coordenadas.dropna(subset=["casosAcumulado", "populacaoTCU2019", "areaKm2"]).copy()
+df_pydeck["densidadePopulacional"] = (df_pydeck["populacaoTCU2019"] / df_pydeck["areaKm2"]).round(2) #densidade populacional do município, usada na cor da coluna
+df_pydeck["casosPor100MilHabitantes"] = (df_pydeck["casosAcumulado"] / df_pydeck["populacaoTCU2019"] * 100000).round(2) #casos por 100 mil habitantes, altura da coluna
+df_pydeck["cor"] = df_pydeck["densidadePopulacional"].apply(lambda densidade: [int(50 + densidade / df_pydeck["densidadePopulacional"].max() * 205), 60, 100, 200])
+mapa_pydeck = pdk.Deck(initial_view_state=pdk.ViewState(latitude=-22.0, longitude=-45.0, zoom=5, pitch=50), layers=[pdk.Layer("ColumnLayer", data=df_pydeck, get_position=["longitude", "latitude"], get_elevation="casosPor100MilHabitantes", elevation_scale=30, radius=15000, get_fill_color="cor", pickable=True)], tooltip={"text": "{municipio} - {estado}\nCasos acumulados: {casosAcumulado}\nCasos por 100 mil habitantes: {casosPor100MilHabitantes}\nDensidade populacional: {densidadePopulacional} hab/km²"})
 
-def selecionar(rotulo, opcoes, padrao, chave):
-    indice = opcoes.index(padrao) if padrao in opcoes else 0
-    return st.selectbox(rotulo, opcoes, index=indice, key=chave)
-
-
-st.title("TP2 - Visualizacoes da COVID-19 no Brasil")
-st.caption(
-    "Fonte epidemiologica: Painel Coronavirus Brasil, Ministerio da Saude. "
-    "As coordenadas sao apenas apoio geografico."
-)
-
-with st.sidebar:
-    st.header("Dados e navegacao")
-    st.markdown(
-        "1. Acesse [covid.saude.gov.br](https://covid.saude.gov.br/).  \n"
-        "2. Clique em **Arquivo CSV**.  \n3. Envie abaixo o ZIP ou os CSVs extraidos."
-    )
-    arquivos = st.file_uploader(
-        "Arquivo(s) oficial(is)", type=["csv", "zip"], accept_multiple_files=True,
-        help="E possivel enviar mais de uma parte ou ano.",
-    )
-    exercicio = st.radio("Exercicio", EXERCICIOS)
-
-
-# EXERCICIO 1 - RESPOSTA TEXTUAL: IMPORTANCIA DA VISUALIZACAO DE DADOS
-if exercicio.startswith("1."):
-    st.header("1. Importancia da visualizacao de dados em uma pandemia")
-    st.markdown(
-        """
-        A visualizacao transforma grandes volumes de registros epidemiologicos em
-        informacoes compreensiveis. Graficos e mapas ajudam a identificar o crescimento
-        ou a queda de casos, comparar territorios, reconhecer grupos mais afetados e
-        acompanhar a pressao sobre os servicos de saude.
-
-        Para gestores, essas visualizacoes apoiam a distribuicao de equipes, leitos,
-        testes, medicamentos e campanhas de prevencao, alem da avaliacao de medidas ja
-        adotadas. Para a populacao, comunicam o nivel de risco, ajudam a combater a
-        desinformacao e orientam escolhas de protecao. A leitura deve considerar a
-        qualidade dos registros, atrasos de notificacao e o fato de que correlacao nao
-        demonstra, sozinha, uma relacao de causa e efeito.
-        """
-    )
-    st.info("Escolha outro exercicio na barra lateral para abrir uma visualizacao.")
-    st.stop()
-
-if not arquivos:
-    st.info("Envie na barra lateral o ZIP ou os CSVs baixados do painel oficial.")
-    st.stop()
-
-try:
-    with st.spinner("Preparando os dados oficiais..."):
-        dados = carregar_dados(tuple((a.name, a.getvalue()) for a in arquivos))
-except Exception as erro:
-    st.error(str(erro))
-    st.stop()
-
-estaduais, municipais = linhas_estaduais(dados), linhas_municipais(dados)
-ufs = sorted(estaduais["estado"].dropna().unique().tolist())
-if estaduais.empty:
-    st.error("Nao foram encontradas linhas estaduais no arquivo enviado.")
-    st.stop()
-st.caption(
-    f"Base preparada: {len(dados):,} linhas relevantes, de "
-    f"{dados['data'].min().date()} a {dados['data'].max().date()}."
-)
-
-
-# EXERCICIO 2 - GRAFICO DE BARRAS COM STREAMLIT
-if exercicio.startswith("2."):
-    st.header("2. Casos novos por semana epidemiologica - Streamlit")
-    c1, c2 = st.columns(2)
-    with c1:
-        uf = selecionar("Estado", ufs, "RJ", "uf2")
-    anos = sorted(estaduais.loc[estaduais["estado"] == uf, "ano"].dropna().astype(int).unique())
-    with c2:
-        ano = st.selectbox("Ano", anos, index=len(anos) - 1, key="ano2")
-    serie = semanal_novos(estaduais.loc[(estaduais["estado"] == uf) & (estaduais["ano"] == ano)], [])
-    st.bar_chart(serie, x="periodo_semana", y="casos_novos", color="#1f77b4")
-    st.markdown(
-        f"**Estado escolhido: {uf}.** O RJ e o padrao por reunir uma grande regiao "
-        "metropolitana e municipios do interior. Barras altas indicam semanas com mais notificacoes."
-    )
-
-
-# EXERCICIO 3 - GRAFICO DE LINHA COM STREAMLIT
-elif exercicio.startswith("3."):
-    st.header("3. Obitos acumulados no Brasil - Streamlit")
-    brasil = dados.loc[
-        dados["estado"].isna() & dados["municipio"].isna()
-        & (dados["regiao"].astype("string").str.lower() == "brasil")
-    ]
-    if not brasil.empty:
-        serie = brasil.groupby(["ordem_semana", "periodo_semana"], as_index=False).agg(
-            data_inicio=("data", "min"), obitos_acumulados=("obitos_acumulados", "max")
-        ).sort_values("ordem_semana")
-    else:
-        por_uf = estaduais.groupby(
-            ["estado", "ordem_semana", "periodo_semana"], as_index=False
-        ).agg(data_inicio=("data", "min"), obitos_acumulados=("obitos_acumulados", "max"))
-        serie = por_uf.groupby(["ordem_semana", "periodo_semana"], as_index=False).agg(
-            data_inicio=("data_inicio", "min"), obitos_acumulados=("obitos_acumulados", "sum")
-        ).sort_values("ordem_semana")
-    st.line_chart(serie, x="data_inicio", y="obitos_acumulados", color="#b22222")
-    st.markdown(
-        "A curva acumulada nao diminui. Uma inclinacao maior indica crescimento mais rapido; "
-        "quando a linha se achata, o ritmo de novos obitos diminuiu. Os pontos finais podem "
-        "mudar devido a atrasos de notificacao."
-    )
-
-
-# EXERCICIO 4 - GRAFICO DE AREA COM STREAMLIT
-elif exercicio.startswith("4."):
-    st.header("4. Casos acumulados em tres estados - Streamlit")
-    padrao = [uf for uf in ["SP", "RJ", "MG"] if uf in ufs]
-    escolhidos = st.multiselect(
-        "Escolha exatamente tres estados", ufs, default=padrao, max_selections=3, key="ufs4"
-    )
-    if len(escolhidos) != 3:
-        st.warning("Selecione tres estados.")
-        st.stop()
-    area = (
-        estaduais.loc[estaduais["estado"].isin(escolhidos)]
-        .groupby(["estado", "ordem_semana"], as_index=False)
-        .agg(data_inicio=("data", "min"), casos_acumulados=("casos_acumulados", "max"))
-        .pivot(index="data_inicio", columns="estado", values="casos_acumulados").sort_index()
-    )
-    st.area_chart(area)
-    finais = area.ffill().iloc[-1].sort_values(ascending=False)
-    st.markdown(
-        f"No fim da base, **{finais.index[0]}** tem o maior acumulado entre os tres "
-        f"({finais.iloc[0]:,.0f} casos). Populacao, urbanizacao, testagem e notificacao "
-        "ajudam a explicar as diferencas; totais absolutos nao medem sozinhos o risco individual."
-    )
-
-
-# EXERCICIO 5 - MAPA COM ST.MAP DO STREAMLIT
-elif exercicio.startswith("5."):
-    st.header("5. Cinco municipios com mais casos acumulados - Streamlit")
-    ufs_municipais = sorted(municipais["estado"].dropna().unique().tolist())
-    uf = selecionar("Estado", ufs_municipais, "RJ", "uf5")
-    top5 = (
-        municipais.loc[municipais["estado"] == uf].sort_values(["data", "casos_acumulados"])
-        .groupby("municipio", as_index=False).tail(1).nlargest(5, "casos_acumulados").copy()
-    )
-    coordenadas, completas = carregar_coordenadas()
-    top5["municipio_chave"] = top5["municipio"].map(chave_texto)
-    mapa = top5.merge(coordenadas, on=["estado", "municipio_chave"], how="left")
-    validos = mapa.dropna(subset=["latitude", "longitude"])
-    if not validos.empty:
-        st.map(validos, latitude="latitude", longitude="longitude", size="casos_acumulados", zoom=6)
-    if len(validos) < len(top5):
-        faltam = ", ".join(mapa.loc[mapa["latitude"].isna(), "municipio"].astype(str))
-        st.warning(f"Sem coordenadas auxiliares para: {faltam}.")
-    st.dataframe(
-        top5[["municipio", "casos_acumulados"]].rename(
-            columns={"municipio": "Municipio", "casos_acumulados": "Casos acumulados"}
-        ), hide_index=True, use_container_width=True,
-    )
-    st.markdown(
-        "O mapa mostra concentracoes espaciais e pode orientar recursos e comparacoes entre "
-        "municipios vizinhos. A concentracao deve ser analisada junto com populacao, mobilidade e testagem."
-    )
-    if not completas:
-        st.caption("A fonte on-line de coordenadas falhou; foi usado o apoio local do RJ.")
-
-
-# EXERCICIO 6 - VISUALIZACAO COM MATPLOTLIB
-elif exercicio.startswith("6."):
-    st.header("6. Casos novos e obitos novos por estado - Matplotlib")
-    ordem = estaduais["ordem_semana"].dropna().max()
-    semana = estaduais.loc[estaduais["ordem_semana"] == ordem]
-    comparacao = semana.groupby("estado", as_index=False)[["casos_novos", "obitos_novos"]].sum()
-    comparacao = comparacao.sort_values("casos_novos", ascending=False)
-    periodo = semana["periodo_semana"].dropna().iloc[0]
-    fig, eixos = plt.subplots(2, 1, figsize=(14, 9), sharex=True)
-    eixos[0].bar(comparacao["estado"], comparacao["casos_novos"], color="#3182bd")
-    eixos[0].set(title=f"Casos novos por estado - {periodo}", ylabel="Casos")
-    eixos[1].bar(comparacao["estado"], comparacao["obitos_novos"], color="#de2d26")
-    eixos[1].set(title=f"Obitos novos por estado - {periodo}", ylabel="Obitos")
-    for eixo in eixos:
-        eixo.grid(axis="y", alpha=.25)
-    eixos[1].tick_params(axis="x", rotation=45)
-    fig.tight_layout()
-    st.pyplot(fig)
-    plt.close(fig)
-    correlacao = comparacao[["casos_novos", "obitos_novos"]].corr().iloc[0, 1]
-    st.markdown(
-        f"Em **{periodo}**, a correlacao estadual foi **{correlacao:.2f}**. Uma relacao "
-        "positiva e esperada, mas uma unica semana nao considera a defasagem entre diagnostico "
-        "e obito e nao demonstra causalidade."
-    )
-
-
-# EXERCICIO 7 - BOXPLOT COM SEABORN
-elif exercicio.startswith("7."):
-    st.header("7. Distribuicao semanal de casos novos - Seaborn")
-    semanal = semanal_regioes(dados)
-    distribuicao = semanal.loc[semanal["regiao"].isin(["Norte", "Nordeste", "Sudeste"])]
-    fig, eixo = plt.subplots(figsize=(11, 6))
-    sns.set_theme(style="whitegrid")
-    sns.boxplot(data=distribuicao, x="regiao", y="casos_novos", hue="regiao", legend=False, ax=eixo)
-    eixo.set(xlabel="Regiao", ylabel="Casos novos por semana", title="Norte, Nordeste e Sudeste")
-    fig.tight_layout()
-    st.pyplot(fig)
-    plt.close(fig)
-    medianas = distribuicao.groupby("regiao")["casos_novos"].median().sort_values(ascending=False)
-    st.markdown(
-        f"A maior mediana aparece no **{medianas.index[0]}** ({medianas.iloc[0]:,.0f}). "
-        "A linha central e a mediana, a caixa contem metade das semanas e extremos indicam "
-        "ondas atipicas. Numeros absolutos tambem refletem o tamanho populacional."
-    )
-
-
-# EXERCICIO 8 - GRAFICO DE AREA COM ALTAIR
-elif exercicio.startswith("8."):
-    st.header("8. Evolucao dos casos novos em uma regiao - Altair")
-    semanal = semanal_regioes(dados)
-    regiao = selecionar("Regiao", REGIOES, "Nordeste", "regiao8")
-    serie = semanal.loc[semanal["regiao"] == regiao]
-    grafico = alt.Chart(serie).mark_area(
-        line={"color": "#08519c"}, color="#6baed6", opacity=.65
-    ).encode(
-        x=alt.X("data_inicio:T", title="Inicio da semana"),
-        y=alt.Y("casos_novos:Q", title="Casos novos"),
-        tooltip=[alt.Tooltip("periodo_semana:N", title="Semana"),
-                 alt.Tooltip("casos_novos:Q", title="Casos", format=",")],
-    ).properties(height=430).interactive()
-    st.altair_chart(grafico, use_container_width=True)
-    pico = serie.loc[serie["casos_novos"].idxmax()]
-    st.markdown(
-        f"Na regiao **{regiao}**, o maior pico aparece em **{pico['periodo_semana']}**, "
-        f"com {pico['casos_novos']:,.0f} casos. Picos representam ondas, mas semanas "
-        "recentes podem estar incompletas por atraso de notificacao."
-    )
-
-
-# EXERCICIO 9 - HEATMAP DE CORRELACAO COM ALTAIR
-elif exercicio.startswith("9."):
-    st.header("9. Correlacao entre indicadores - Altair")
-    uf = selecionar("Estado", ufs, "RJ", "uf9")
-    base = estaduais.loc[estaduais["estado"] == uf]
-    indicadores = ["casos_novos", "obitos_novos"]
-    if "leitos_ocupados" in base and base["leitos_ocupados"].notna().any():
-        indicadores.append("leitos_ocupados")
-    matriz = base[indicadores].corr()
-    longa = matriz.rename_axis("x").reset_index().melt(id_vars="x", var_name="y", value_name="r")
-    rotulos = {"casos_novos": "Casos novos", "obitos_novos": "Obitos novos",
-               "leitos_ocupados": "Leitos ocupados"}
-    longa["x"], longa["y"] = longa["x"].map(rotulos), longa["y"].map(rotulos)
-    base_alt = alt.Chart(longa).encode(x=alt.X("x:N", title=None), y=alt.Y("y:N", title=None))
-    cores = base_alt.mark_rect().encode(
-        color=alt.Color("r:Q", scale=alt.Scale(domain=[-1, 1], scheme="redblue", reverse=True))
-    )
-    textos = base_alt.mark_text(fontSize=16).encode(
-        text=alt.Text("r:Q", format=".2f"),
-        color=alt.condition("abs(datum.r) > 0.55", alt.value("white"), alt.value("black")),
-    )
-    st.altair_chart((cores + textos).properties(height=430), use_container_width=True)
-    r = matriz.loc["casos_novos", "obitos_novos"]
-    nota = (
-        "Os leitos foram incluidos porque existem na base."
-        if "leitos_ocupados" in indicadores else
-        "O arquivo nao possui leitos ocupados; conforme o enunciado, foram usados os indicadores disponiveis."
-    )
-    st.markdown(
-        f"Em **{uf}**, a correlacao no mesmo dia foi **{r:.2f}**. A defasagem entre "
-        f"diagnostico e obito pode enfraquecer essa relacao. {nota}"
-    )
-
-
-# EXERCICIO 10 - GRAFICO DE PIZZA COM PLOTLY
-elif exercicio.startswith("10."):
-    st.header("10. Distribuicao dos casos acumulados por regiao - Plotly")
-    regionais = linhas_regionais(dados)
-    if not regionais.empty:
-        totais = regionais.sort_values("data").groupby("regiao", as_index=False).tail(1)
-        totais = totais[["regiao", "casos_acumulados"]]
-    else:
-        ultimos = estaduais.sort_values("data").groupby("estado", as_index=False).tail(1)
-        totais = ultimos.groupby("regiao", as_index=False)["casos_acumulados"].sum()
-    totais = totais.loc[totais["regiao"].isin(REGIOES)]
-    figura = go.Figure(go.Pie(
-        labels=totais["regiao"], values=totais["casos_acumulados"], hole=.25,
-        textinfo="label+percent", hovertemplate="%{label}<br>%{value:,.0f} casos<extra></extra>",
-    ))
-    figura.update_layout(title="Participacao das cinco regioes")
-    st.plotly_chart(figura, use_container_width=True)
-    lider = totais.loc[totais["casos_acumulados"].idxmax()]
-    percentual = lider["casos_acumulados"] / totais["casos_acumulados"].sum() * 100
-    st.markdown(
-        f"O **{lider['regiao']}** concentra a maior parcela: **{percentual:.1f}%**. "
-        "O total absoluto acompanha em parte a populacao; taxas por habitante comparam melhor o risco."
-    )
-
-
-# EXERCICIO 11 - SUBPLOTS COM PLOTLY
-elif exercicio.startswith("11."):
-    st.header("11. Casos e obitos novos em duas regioes - Plotly")
-    semanal = semanal_regioes(dados)
-    escolhidas = st.multiselect(
-        "Escolha duas regioes", REGIOES, default=["Sudeste", "Nordeste"],
-        max_selections=2, key="reg11",
-    )
-    if len(escolhidas) != 2:
-        st.warning("Selecione duas regioes.")
-        st.stop()
-    figura = make_subplots(rows=1, cols=2, subplot_titles=escolhidas)
-    for coluna, regiao in enumerate(escolhidas, 1):
-        serie = semanal.loc[semanal["regiao"] == regiao]
-        figura.add_trace(go.Bar(
-            x=serie["periodo_semana"], y=serie["casos_novos"], name="Casos novos",
-            marker_color="#3182bd", showlegend=coluna == 1), row=1, col=coluna)
-        figura.add_trace(go.Bar(
-            x=serie["periodo_semana"], y=serie["obitos_novos"], name="Obitos novos",
-            marker_color="#de2d26", showlegend=coluna == 1), row=1, col=coluna)
-    figura.update_layout(height=560, barmode="group", title="Comparacao semanal")
-    figura.update_xaxes(title_text="Semana", tickangle=-45)
-    figura.update_yaxes(title_text="Quantidade")
-    st.plotly_chart(figura, use_container_width=True)
-    totais = semanal.loc[semanal["regiao"].isin(escolhidas)].groupby("regiao")[["casos_novos"]].sum()
-    st.markdown(
-        f"**{totais['casos_novos'].idxmax()}** registra mais casos no periodo. Os subplots "
-        "comparam o momento das ondas; obitos tendem a responder com atraso e em escala menor."
-    )
-
-
-# EXERCICIO 12 - MAPA INTERATIVO COM PYDECK
-elif exercicio.startswith("12."):
-    st.header("12. Casos ajustados pela populacao municipal - PyDeck")
-    regiao = selecionar("Regiao", REGIOES, "Sudeste", "regiao12")
-    base = municipais.loc[municipais["regiao"] == regiao].copy()
-    base["municipio_chave"] = base["municipio"].map(chave_texto)
-    coordenadas, completas = carregar_coordenadas()
-    mapa = base.merge(coordenadas, on=["estado", "municipio_chave"], how="left")
-    mapa = mapa.dropna(subset=["latitude", "longitude", "populacao", "casos_acumulados"])
-    mapa = mapa.loc[mapa["populacao"] > 0].copy()
-    mapa["incidencia_100k"] = mapa["casos_acumulados"] / mapa["populacao"] * 100_000
-    mapa["elevacao"] = mapa["incidencia_100k"].clip(0, 150_000)
-    if mapa.empty:
-        st.warning("Nao ha coordenadas suficientes para a regiao escolhida.")
-        st.stop()
-    centros = {
-        "Norte": (-4.5, -60., 3.2), "Nordeste": (-9., -39., 4.),
-        "Sudeste": (-21., -44., 4.2), "Sul": (-27., -51., 4.4),
-        "Centro-Oeste": (-15., -55., 3.8),
-    }
-    latitude, longitude, zoom = centros[regiao]
-    camada = pdk.Layer(
-        "ColumnLayer", data=mapa, get_position="[longitude, latitude]",
-        get_elevation="elevacao", elevation_scale=1, radius=6000,
-        get_fill_color=[230, 85, 45, 180], pickable=True, auto_highlight=True,
-    )
-    deck = pdk.Deck(
-        layers=[camada],
-        initial_view_state=pdk.ViewState(
-            latitude=latitude, longitude=longitude, zoom=zoom, pitch=45, bearing=0
-        ),
-        tooltip={"html": "<b>{municipio} - {estado}</b><br/>Casos: {casos_acumulados}"
-                           "<br/>Incidencia/100 mil: {incidencia_100k}"},
-    )
-    st.pydeck_chart(deck, use_container_width=True)
-    st.markdown(
-        "A altura representa a **incidencia acumulada por 100 mil habitantes**. O ajuste "
-        "torna municipios de tamanhos diferentes comparaveis. Densidade, mobilidade, moradia, "
-        "prevencao e testagem influenciam a disseminacao."
-    )
-    st.caption(
-        "Coordenadas auxiliares: Municipios-Brasileiros (GitHub). "
-        "Populacao e casos: Ministerio da Saude."
-    )
-    if not completas:
-        st.warning("A fonte de coordenadas falhou; o mapa ficou limitado ao apoio local do RJ.")
+st.pydeck_chart(mapa_pydeck)
+st.write(df_pydeck[["municipio", "estado", "casosAcumulado", "casosPor100MilHabitantes", "densidadePopulacional"]])
+st.write("O mapa apresenta municípios da região **Sudeste**. "
+         "A altura das colunas mostra os casos acumulados por 100 mil habitantes e a cor representa a densidade populacional. "
+         "As colunas mais avermelhadas indicam municípios com mais habitantes por km². "
+         "Em municípios mais densos existe maior proximidade entre as pessoas, o que pode facilitar a disseminação da COVID-19.")
